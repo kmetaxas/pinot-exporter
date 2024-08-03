@@ -34,3 +34,20 @@ func TestNewConfigWithOptions(t *testing.T) {
 	assert.Equal(t, 9999, config.ListenPort)
 	assert.Equal(t, 120, config.PollFrequencySeconds)
 }
+
+func TestConfigIsValid(t *testing.T) {
+
+	config := NewConfig()
+	err := config.IsValid()
+	// We are missing the Pinot controller info, which makes it invalid
+	assert.NotNil(t, err)
+
+	// Now assign a controller and test again
+	controller := PinotController{
+		URL: "http://localhost:9000",
+	}
+	config.PinotController = &controller
+	err = config.IsValid()
+	assert.Nil(t, err)
+
+}
