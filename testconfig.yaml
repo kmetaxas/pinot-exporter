@@ -1,0 +1,6 @@
+---
+port: 8088 # default is 8080
+controller:
+  url: http://localhost:9000
+
+
