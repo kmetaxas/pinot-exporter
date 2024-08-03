@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -12,23 +14,56 @@ import (
 
 // Our metrics
 var (
-	TableSizeBytes = promauto.NewGauge(prometheus.GaugeOpts{
+	TableSizeBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pinotexporter_table_size_bytes",
 		Help: "Table size in bytes",
-	})
+	},
+		[]string{"table"},
+	)
 )
 
+/*
+FanOut consumer receives table updates from the tables channel and
+distributes messages to all interested recepients
+*/
+
+func tableFanOutConsumer(tables <-chan []string, tableCache TableCache, workerPool *CollectorWorkerPool) {
+	// First setup the refresh listener using another channel that this goroutine will copy into
+	tablesCopyForCache := make(chan []string, 1)
+	tablesCopyForPool := make(chan []string, 1)
+	go tableCache.TableRefreshChanListener(tablesCopyForCache)
+	go workerPool.SubscribeToTableUpdates(tablesCopyForPool)
+
+	for {
+		select {
+		case newTables := <-tables:
+			{
+				// push record into the copy for TableRefreshChanListener
+				tablesCopyForCache <- newTables
+				// Send each record into the
+				tablesCopyForPool <- newTables
+			}
+		default:
+		}
+	}
+
+}
 func main() {
 
-	tables := make(chan []string, 1)
+	// Seed the random number generator
+	rand.Seed(time.Now().UnixNano())
 
+	tables := make(chan []string, 1)
 	var tableCache TableCache
 
 	conf, err := NewConfigFromFile("testconfig.yaml")
+	workerPool := NewCollectorWorkerPool(4, conf.PinotController, tables)
+	defer workerPool.Close()
 
 	ctx := context.Background()
+
 	go refreshTableCache(ctx, conf.PinotController, conf.PollFrequencySeconds, tables)
-	go tableCache.TableRefreshChanListener(tables)
+	go tableFanOutConsumer(tables, tableCache, workerPool)
 
 	if err != nil {
 		panic(err)
