@@ -25,9 +25,6 @@ func NewCollectorWorkerPool(numWorkers int, controller *PinotController, incomin
 		semaphore:          make(chan struct{}, numWorkers),
 		tables:             make(chan string, 1),
 	}
-	// Semaphore to limit concurrent workers
-	// Number of workers
-
 	// Start workers
 	for i := 1; i <= numWorkers; i++ {
 		ctx := context.Background()
@@ -74,7 +71,7 @@ func worker(ctx context.Context, tables <-chan string, controller *PinotControll
 			time.Sleep(jitter)
 			size, err := controller.GetSizeForTable(ctx, table)
 			if err != nil {
-				fmt.Printf("Failed to get size for table %s with error %s\n", size, err)
+				fmt.Printf("Failed to get size for table %s with error %s\n", table, err)
 				return
 			}
 			TableSizeBytes.WithLabelValues(table).Set(float64(size))

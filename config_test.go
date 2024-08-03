@@ -22,6 +22,7 @@ func TestNewConfig(t *testing.T) {
 	// Assert we have some defaults as epected
 	assert.Equal(t, 8080, config.ListenPort)
 	assert.Equal(t, 30, config.PollFrequencySeconds)
+	assert.Equal(t, 5, config.MaxParallelCollectors)
 }
 
 func TestNewConfigWithOptions(t *testing.T) {
@@ -29,10 +30,12 @@ func TestNewConfigWithOptions(t *testing.T) {
 	config := NewConfig(
 		WithPort(9999),
 		WithPollFrequencySeconds(120),
+		WithMaxParallelCollectors(12),
 	)
 	// Assert we have some defaults as epected
 	assert.Equal(t, 9999, config.ListenPort)
 	assert.Equal(t, 120, config.PollFrequencySeconds)
+	assert.Equal(t, 12, config.MaxParallelCollectors)
 }
 
 func TestConfigIsValid(t *testing.T) {

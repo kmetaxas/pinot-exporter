@@ -57,7 +57,7 @@ func main() {
 	var tableCache TableCache
 
 	conf, err := NewConfigFromFile("testconfig.yaml")
-	workerPool := NewCollectorWorkerPool(4, conf.PinotController, tables)
+	workerPool := NewCollectorWorkerPool(conf.MaxParallelCollectors, conf.PinotController, tables)
 	defer workerPool.Close()
 
 	ctx := context.Background()

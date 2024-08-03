@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	ListenPort           int              `json:"port" yaml:"port"`
-	PinotController      *PinotController `json:"controller" yaml:"controller"`
-	PollFrequencySeconds int              `json:"poll_freq_seconds" yaml:"poll_freq_seconds"`
+	ListenPort            int              `json:"port" yaml:"port"`
+	PinotController       *PinotController `json:"controller" yaml:"controller"`
+	PollFrequencySeconds  int              `json:"poll_freq_seconds" yaml:"poll_freq_seconds"`
+	MaxParallelCollectors int              `json:"max_parallel_collectors" yaml:"max_parallel_collectors"`
 }
 
 type Option func(*Config)
@@ -19,8 +20,9 @@ func NewConfig(options ...func(*Config)) *Config {
 
 	// Start with some defaults where possible
 	config := &Config{
-		ListenPort:           8080,
-		PollFrequencySeconds: 30,
+		ListenPort:            8080,
+		PollFrequencySeconds:  30,
+		MaxParallelCollectors: 5,
 	}
 
 	for _, opt := range options {
@@ -35,6 +37,12 @@ func (c *Config) IsValid() error {
 		return fmt.Errorf("Pinot controller config missing")
 	}
 	return nil
+}
+
+func WithMaxParallelCollectors(maxCollectors int) Option {
+	return func(c *Config) {
+		c.MaxParallelCollectors = maxCollectors
+	}
 }
 
 // Listen on Port
