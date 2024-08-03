@@ -9,7 +9,7 @@ import (
 
 type TableCache struct {
 	Tables []string `json:"tables"`
-	wg     sync.WaitGroup
+	mutex  sync.Mutex
 }
 
 func refreshTableCache(ctx context.Context, controller *PinotController, sleepDuration int, tables chan<- []string) {
@@ -32,9 +32,9 @@ func (t *TableCache) TableRefreshChanListener(tables <-chan []string) {
 		case newTables := <-tables:
 			{
 				fmt.Printf("TableCache received update: %+v\n", newTables)
-				t.wg.Add(1)
+				t.mutex.Lock()
 				t.Tables = newTables
-				t.wg.Done()
+				t.mutex.Unlock()
 			}
 		default:
 		}
