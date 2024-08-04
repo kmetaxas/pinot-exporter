@@ -42,15 +42,11 @@ func TestConfigIsValid(t *testing.T) {
 
 	config := NewConfig()
 	err := config.IsValid()
-	// We are missing the Pinot controller info, which makes it invalid
-	assert.NotNil(t, err)
-
-	// Now assign a controller and test again
-	controller := PinotController{
-		URL: "http://localhost:9000",
-	}
-	config.PinotController = &controller
-	err = config.IsValid()
 	assert.Nil(t, err)
+
+	// Now remove a controller and test again
+	config.PinotController = nil
+	err = config.IsValid()
+	assert.NotNil(t, err)
 
 }

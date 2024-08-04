@@ -18,11 +18,16 @@ type Option func(*Config)
 
 func NewConfig(options ...func(*Config)) *Config {
 
+	pinotDefault := PinotController{
+		URL: "http://localhost:9000",
+	}
+
 	// Start with some defaults where possible
 	config := &Config{
 		ListenPort:            8080,
 		PollFrequencySeconds:  30,
 		MaxParallelCollectors: 5,
+		PinotController:       &pinotDefault,
 	}
 
 	for _, opt := range options {
