@@ -7,27 +7,32 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// pinot-exporter can discover the Kubernetes services of Pinot Controller using a Label selector search
+// You can configure the labels here or any Kubernetes discovery specific options.
+type ServiceDiscoveryConfigK8S struct {
+	Labels map[string]string `json:"labelSelector" yaml:"labelSelector"`
+}
 type Config struct {
 	ListenPort            int              `json:"port" yaml:"port"`
 	PinotController       *PinotController `json:"controller" yaml:"controller"`
 	PollFrequencySeconds  int              `json:"poll_freq_seconds" yaml:"poll_freq_seconds"`
 	MaxParallelCollectors int              `json:"max_parallel_collectors" yaml:"max_parallel_collectors"`
+	// Mode can be [ "kubernetes", "direct"]
+	Mode             string                    `json:"mode" yaml:"mode"`
+	ServiceDiscovery ServiceDiscoveryConfigK8S `json:"serviceDiscovery" yaml:"serviceDiscovery"`
 }
 
 type Option func(*Config)
 
 func NewConfig(options ...func(*Config)) *Config {
 
-	pinotDefault := PinotController{
-		URL: "http://localhost:9000",
-	}
-
 	// Start with some defaults where possible
 	config := &Config{
 		ListenPort:            8080,
 		PollFrequencySeconds:  30,
 		MaxParallelCollectors: 5,
-		PinotController:       &pinotDefault,
+		//PinotController:       &pinotDefault,
+		Mode: "direct",
 	}
 
 	for _, opt := range options {
@@ -38,9 +43,21 @@ func NewConfig(options ...func(*Config)) *Config {
 
 func (c *Config) IsValid() error {
 
-	if c.PinotController == nil {
-		return fmt.Errorf("Pinot controller config missing")
+	if (c.Mode != "direct") && (c.Mode != "kubernetes") {
+		return fmt.Errorf("unknown mode %s - should be one of 'direct' or 'kubernetes'", c.Mode)
 	}
+	if c.Mode == "direct" {
+		if c.PinotController == nil {
+			return fmt.Errorf("Pinot controller config missing")
+		}
+	}
+	if c.Mode == "kubernetes" {
+		// First, make sure we have labels defined
+		if len(c.ServiceDiscovery.Labels) == 0 {
+			return fmt.Errorf("serviceDiscovery.labels is not defined")
+		}
+	}
+
 	return nil
 }
 

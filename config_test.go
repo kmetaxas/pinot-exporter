@@ -41,12 +41,29 @@ func TestNewConfigWithOptions(t *testing.T) {
 func TestConfigIsValid(t *testing.T) {
 
 	config := NewConfig()
-	err := config.IsValid()
-	assert.Nil(t, err)
+	assert.NotNil(t, config.IsValid())
 
+	controller := PinotController{
+		URL: "http://localhost:9000",
+	}
 	// Now remove a controller and test again
-	config.PinotController = nil
-	err = config.IsValid()
-	assert.NotNil(t, err)
+	config.PinotController = &controller
+
+	assert.Nil(t, config.IsValid())
+
+	// switch to kubernetes mode
+	config.Mode = "kubernetes"
+	// validation should fail as we have no Labels
+	assert.NotNil(t, config.IsValid())
+
+	// add labels and make sure validation passes
+	kubeconfig := ServiceDiscoveryConfigK8S{
+		Labels: map[string]string{
+			"app":      "pinot",
+			"nodeType": "controller",
+		},
+	}
+	config.ServiceDiscovery = kubeconfig
+	assert.Nil(t, config.IsValid())
 
 }
