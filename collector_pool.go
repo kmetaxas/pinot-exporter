@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+/*
+A WorkerPool is Per-Pinot cluster
+Its job is to collect metrics from all tables in the cluster.
+Since there could be a lot of tables, we want to parallelize this task
+*/
 type CollectorWorkerPool struct {
 	wg                 sync.WaitGroup
 	controller         *PinotController

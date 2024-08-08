@@ -70,15 +70,6 @@ func main() {
 	}
 	fmt.Printf("conf = %+v\n", conf)
 
-	for _, table := range tableCache.GetTables() {
-		ctx = context.Background()
-		size, err := conf.PinotController.GetSizeForTable(ctx, table)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("Size for %s= %d", table, size)
-	}
-
 	http.Handle("/metrics", promhttp.Handler())
 	http.ListenAndServe(fmt.Sprintf(":%d", conf.ListenPort), nil)
 
