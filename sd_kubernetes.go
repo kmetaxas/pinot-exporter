@@ -83,7 +83,7 @@ func createKubernetesClient(config *rest.Config) (*kubernetes.Clientset, error) 
 
 }
 
-// Connect to kubernetes.
+// Connect to kubernetes. Creates a clientset object
 func (k *KubePinotControllerCache) Connect() error {
 	config, err := getKubernetesConfig()
 	if err != nil {

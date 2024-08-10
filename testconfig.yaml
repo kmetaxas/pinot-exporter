@@ -1,5 +1,10 @@
 ---
 port: 8088 # default is 8080
+mode: kubernetes
+serviceDiscovery:
+  labelSelector:
+    app: pinot
+    nodeType: controller
 controller:
   url: http://localhost:9000
 

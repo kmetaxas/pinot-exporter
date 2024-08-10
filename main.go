@@ -40,7 +40,7 @@ func tableFanOutConsumer(tables <-chan []string, tableCache TableCache, workerPo
 			{
 				// push record into the copy for TableRefreshChanListener
 				tablesCopyForCache <- newTables
-				// Send each record into the
+				// Inform the pool about table updates
 				tablesCopyForPool <- newTables
 			}
 		default:
@@ -53,23 +53,38 @@ func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UnixNano())
 
-	tables := make(chan []string, 1)
-	var tableCache TableCache
-
 	conf, err := NewConfigFromFile("testconfig.yaml")
-	workerPool := NewCollectorWorkerPool(conf.MaxParallelCollectors, conf.PinotController, tables)
-	defer workerPool.Close()
-
-	ctx := context.Background()
-
-	go refreshTableCache(ctx, conf.PinotController, conf.PollFrequencySeconds, tables)
-	go tableFanOutConsumer(tables, tableCache, workerPool)
-
+	fmt.Printf("conf = %+v\n", conf)
+	err = conf.IsValid()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("conf = %+v\n", conf)
+	// IF Direct mode
+	if conf.Mode == "direct" {
+		var tableCache TableCache
+		tables := make(chan []string, 1)
+		workerPool := NewCollectorWorkerPool(conf.MaxParallelCollectors, conf.PinotController, tables)
+		defer workerPool.Close()
 
+		ctx := context.Background() // TODO set a timeout
+
+		go refreshTableCache(ctx, conf.PinotController, conf.PollFrequencySeconds, tables)
+		go tableFanOutConsumer(tables, tableCache, workerPool)
+
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// IF Kubernetes MODE
+	if conf.Mode == "kubernetes" {
+		/*
+		   We need track know Pinot clusters and on each update:
+		   -
+		*/
+	}
+
+	// Start serving metrics
 	http.Handle("/metrics", promhttp.Handler())
 	http.ListenAndServe(fmt.Sprintf(":%d", conf.ListenPort), nil)
 
