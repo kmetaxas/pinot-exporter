@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -49,9 +48,13 @@ func (c *CollectorWorkerPool) Close() {
 func (c *CollectorWorkerPool) SubscribeToTableUpdates(tables <-chan []string) {
 	for {
 		select {
-		case newTables := <-tables:
+		case newTables, chanIsOpen := <-tables:
 			{
-				fmt.Printf("Pool received []table update: %+v\n", newTables)
+				if !chanIsOpen {
+					// cleanup and return
+					return
+				}
+				logger.Debugf("Pool received []table update: %+v\n", newTables)
 				for _, table := range newTables {
 					c.tables <- table
 				}
@@ -76,7 +79,7 @@ func worker(ctx context.Context, tables <-chan string, controller *PinotControll
 			time.Sleep(jitter)
 			size, err := controller.GetSizeForTable(ctx, table)
 			if err != nil {
-				fmt.Printf("Failed to get size for table %s with error %s\n", table, err)
+				logger.Errorf("Failed to get size for table %s with error %s\n", table, err)
 				return
 			}
 			TableSizeBytes.WithLabelValues(table).Set(float64(size))

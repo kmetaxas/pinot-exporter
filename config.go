@@ -7,10 +7,17 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Configure the kube config access (path, context etc)
+type KubernetesConfig struct {
+	Path    string `json:"path" yaml:"path"`
+	Context string `json:"context" yaml:"context"`
+}
+
 // pinot-exporter can discover the Kubernetes services of Pinot Controller using a Label selector search
 // You can configure the labels here or any Kubernetes discovery specific options.
 type ServiceDiscoveryConfigK8S struct {
-	Labels map[string]string `json:"labelSelector" yaml:"labelSelector"`
+	Labels     map[string]string `json:"labelSelector" yaml:"labelSelector"`
+	KubeConfig KubernetesConfig  `json:"kubeconfig" yaml:"kubeconfig"`
 }
 type Config struct {
 	ListenPort            int              `json:"port" yaml:"port"`

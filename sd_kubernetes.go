@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,16 +25,15 @@ type KubePinotControllerCache struct {
 }
 
 // Creates a new KubePinotControllerCache with defaults.
-func NewKubePinotControllerCache() *KubePinotControllerCache {
+func NewKubePinotControllerCache(discoveryConfig ServiceDiscoveryConfigK8S) *KubePinotControllerCache {
 	c := KubePinotControllerCache{
 		// Add defaults
 		KubeApiEndpoint:    "https://kubernetes:443",
 		ServiceAccountName: "default",
 		KubeConfigPath:     "~/.kube/config",
+		discoveryConfig:    discoveryConfig,
 	}
-
 	return &c
-
 }
 
 // Create and return a new Kubernetes client
@@ -44,20 +42,18 @@ func getKubernetesConfig() (*rest.Config, error) {
 	if isRunningInsideKubernetes() {
 		config, err := rest.InClusterConfig()
 		if err != nil {
-			fmt.Printf("Failed to get inClusterConfig with error %s", err)
+			logger.Errorf("Failed to get inClusterConfig with error %s", err)
 			return nil, err
 		}
 		return config, nil
 	} else {
 		// Running outside of kubernetes, so get using ~/.kube/config (as per config)
 
-		kubeconfig := flag.String("kubeconfig", filepath.Join(homeDir(), ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		context := flag.String("context", "minikube", "name of the kubeconfig context to use")
-		flag.Parse()
-
+		context := "minikube" // TODO make this config
+		kubeconfig := filepath.Join(homeDir(), ".kube", "config")
 		config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-			&clientcmd.ClientConfigLoadingRules{ExplicitPath: *kubeconfig},
-			&clientcmd.ConfigOverrides{CurrentContext: *context},
+			&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
+			&clientcmd.ConfigOverrides{CurrentContext: context},
 		).ClientConfig()
 		if err != nil {
 			panic(err.Error())
@@ -76,7 +72,7 @@ func createKubernetesClient(config *rest.Config) (*kubernetes.Clientset, error) 
 	// Create a Kubernetes client
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		fmt.Printf("Failed to create ClientSet with error: %s", err)
+		logger.Errorf("Failed to create ClientSet with error: %s", err)
 		return clientset, err
 	}
 	return clientset, err
@@ -138,13 +134,13 @@ func (k *KubePinotControllerCache) refreshPinotClustersList() []string {
 	})
 
 	if err != nil {
-		fmt.Printf("Error fetching Pinot services: %v\n", err)
+		logger.Errorf("Error fetching Pinot services: %v\n", err)
 		return endpoints
 	}
 
-	fmt.Printf("Fetched Pinot services: %v\n", services)
+	logger.Infof("Fetched Pinot services: %v\n", services)
 	for _, service := range services.Items {
-		fmt.Printf("Discovered service %+v\n", service)
+		logger.Debugf("Discovered service %+v\n", service)
 		// TODO http or https?
 		// TODO (2) first port is used. How to check which port if a service has multiple ports?
 		endpoints = append(endpoints, fmt.Sprintf("http://%s.%s.svc:%d", service.ObjectMeta.Name, service.ObjectMeta.Namespace, service.Spec.Ports[0].Port))
@@ -157,7 +153,7 @@ func (k *KubePinotControllerCache) refreshPinotClustersList() []string {
 			URL: endpoint,
 		})
 	}
-	fmt.Printf("We have our endpoints: %+v\n", endpoints)
+	logger.Debugf("We have our endpoints: %+v\n", endpoints)
 	k.knownControllers = knownControllers
 	return endpoints
 }

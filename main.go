@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 )
 
 // Our metrics
@@ -21,6 +22,9 @@ var (
 		[]string{"table"},
 	)
 )
+
+// yeah, yeah , this is a bad practice and we should pass logger explicitly everywhere..
+var logger *zap.SugaredLogger
 
 /*
 FanOut consumer receives table updates from the tables channel and
@@ -50,17 +54,24 @@ func tableFanOutConsumer(tables <-chan []string, tableCache TableCache, workerPo
 }
 func main() {
 
+	//setup logging
+	zapLogger, _ := zap.NewDevelopment()
+	defer zapLogger.Sync()
+	logger = zapLogger.Sugar()
+	logger.Infof("Started logging")
+
 	// Seed the random number generator
 	rand.Seed(time.Now().UnixNano())
 
 	conf, err := NewConfigFromFile("testconfig.yaml")
-	fmt.Printf("conf = %+v\n", conf)
+	logger.Debugf("conf = %+v\n", conf)
 	err = conf.IsValid()
 	if err != nil {
 		panic(err)
 	}
 	// IF Direct mode
 	if conf.Mode == "direct" {
+		logger.Info("Starting on Direct mode")
 		var tableCache TableCache
 		tables := make(chan []string, 1)
 		workerPool := NewCollectorWorkerPool(conf.MaxParallelCollectors, conf.PinotController, tables)
@@ -82,6 +93,15 @@ func main() {
 		   We need track know Pinot clusters and on each update:
 		   -
 		*/
+		logger.Info("Starting on Kubernetes mode")
+		kubeClient := NewKubePinotControllerCache(conf.ServiceDiscovery)
+		pinotManager, err := NewPinotManager(conf.MaxParallelCollectors, conf.PollFrequencySeconds, kubeClient)
+		if err != nil {
+			logger.Errorf("Can't create new PinotManager because: %s", err)
+			panic(err)
+		}
+		go pinotManager.refreshPinotsForever()
+
 	}
 
 	// Start serving metrics

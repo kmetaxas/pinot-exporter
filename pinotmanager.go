@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -17,10 +16,8 @@ type PinotManager struct {
 	tableCaches map[string]*TableCache
 	workerPools map[string]*CollectorWorkerPool
 	// channels to get Table updates from, for each pinot service endpoint (key)
-	tableChannels map[string](chan []string)
-	// Channels to get send table updates to Collector Pool for each pinot endpoint (key)
-	poolTableNotifyChannels map[string](chan []string)
-	numConnectorWorkers     int
+	tableChannels       map[string](chan []string)
+	numConnectorWorkers int
 	// Seconds
 	refreshInteval int
 	// kuberneted controller cache
@@ -30,14 +27,13 @@ type PinotManager struct {
 func NewPinotManager(numWorkers int, refreshInteval int, kubeCache *KubePinotControllerCache) (*PinotManager, error) {
 	// setup with defaults
 	mgr := &PinotManager{
-		knownPinots:             make(map[string]PinotController),
-		tableCaches:             make(map[string]*TableCache),
-		workerPools:             make(map[string]*CollectorWorkerPool),
-		tableChannels:           make(map[string](chan []string)),
-		poolTableNotifyChannels: make(map[string](chan []string)),
-		kubeCache:               kubeCache,
-		numConnectorWorkers:     numWorkers,
-		refreshInteval:          refreshInteval,
+		knownPinots:         make(map[string]PinotController),
+		tableCaches:         make(map[string]*TableCache),
+		workerPools:         make(map[string]*CollectorWorkerPool),
+		tableChannels:       make(map[string](chan []string)),
+		kubeCache:           kubeCache,
+		numConnectorWorkers: numWorkers,
+		refreshInteval:      refreshInteval,
 	}
 	// TODO some validation and sanity checks
 	return mgr, nil
@@ -45,11 +41,12 @@ func NewPinotManager(numWorkers int, refreshInteval int, kubeCache *KubePinotCon
 
 func (m *PinotManager) refreshPinotsForever() {
 	// Refresh
+	logger.Infof("Starting the refreshPinotsForever goroutine with a refresh inteval of %d", m.refreshInteval)
 	err := m.kubeCache.Connect()
 	if err != nil {
 		panic(err)
 	}
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(time.Duration(m.refreshInteval) * time.Second)
 	for range ticker.C {
 		// This call refreshes the internal cache of m.kubeCache but also returns the results to us
 		endpoints := m.kubeCache.refreshPinotClustersList()
@@ -66,6 +63,7 @@ Checks if a pinot in the arguments is:
 - Deleted: Removes an existing TableCache and CollectorPool
 */
 func (m *PinotManager) updateKnownPinotsCache(pinots []string) {
+	logger.Debugf("updateKnownPinotsCache refresh received with %+v", pinots)
 	currentPinots := make(map[string]struct{})
 	for _, pinot := range pinots {
 		currentPinots[pinot] = struct{}{}
@@ -76,7 +74,7 @@ func (m *PinotManager) updateKnownPinotsCache(pinots []string) {
 		if _, exists := m.knownPinots[pinot]; !exists {
 			controller, err := m.monitorPinot(pinot)
 			if err != nil {
-				fmt.Printf("Unable to start monitoring %s due to error %s", pinot, err)
+				logger.Errorf("Unable to start monitoring %s due to error %s", pinot, err)
 			}
 			m.knownPinots[pinot] = controller
 		}
@@ -87,7 +85,7 @@ func (m *PinotManager) updateKnownPinotsCache(pinots []string) {
 		if _, exists := currentPinots[pinot]; !exists {
 			err := m.unmonitorPinot(pinot)
 			if err != nil {
-				fmt.Printf("Encountered error while stopping monitoring of endpoint  %s due to error %s", pinot, err)
+				logger.Errorf("Encountered error while stopping monitoring of endpoint  %s due to error %s", pinot, err)
 			}
 			delete(m.knownPinots, pinot)
 		}
@@ -101,6 +99,7 @@ func (m *PinotManager) tableUpdateReceiverFanOut() {
 func (m *PinotManager) monitorPinot(endpoint string) (PinotController, error) {
 	var controller PinotController
 	controller.URL = endpoint
+	logger.Infof("Setting up monitoring for newly discovered Pinot %s", endpoint)
 
 	// Add a channel for table updates for this endpoint
 	tablesChan := make(chan []string)
@@ -112,13 +111,51 @@ func (m *PinotManager) monitorPinot(endpoint string) (PinotController, error) {
 	// setup a collectorpool to collect metrics from this pinot
 	workerPool := NewCollectorWorkerPool(m.numConnectorWorkers, &controller, tablesChan)
 	m.workerPools[endpoint] = workerPool
+	// Create fanout consumer
+	go m.tableFanOutConsumer(endpoint, tablesChan, tableCache, workerPool)
+
 	return controller, nil
+}
+func (m *PinotManager) tableFanOutConsumer(endpoint string, tables <-chan []string, tableCache *TableCache, workerPool *CollectorWorkerPool) {
+	// First setup the refresh listener using another channel that this goroutine will copy into
+	logger.Infof("Starting fanout consumer for %s", endpoint)
+	tablesCopyForCache := make(chan []string, 1)
+	tablesCopyForPool := make(chan []string, 1)
+	go tableCache.TableRefreshChanListener(tablesCopyForCache)
+	go workerPool.SubscribeToTableUpdates(tablesCopyForPool)
+
+	for {
+		select {
+		case newTables, chanIsOpen := <-tables:
+			{
+				if !chanIsOpen {
+					// cleanup and return
+					logger.Debugf("Closing channels of fanout for %s and returning from goroutine", endpoint)
+					close(tablesCopyForCache)
+					close(tablesCopyForPool)
+					return
+				}
+				// push record into the copy for TableRefreshChanListener
+				tablesCopyForCache <- newTables
+				// Inform the pool about table updates
+				tablesCopyForPool <- newTables
+			}
+		default:
+		}
+	}
+
 }
 
 func (m *PinotManager) unmonitorPinot(endpoint string) error {
 
-	// TODO
 	/*
-	 */
+	   - close channels which will stop goroutines for these channels
+	   - delete entries in maps for this endpoint, and destroy relevant objects
+	*/
+	logger.Infof("Stopping monitoring of removed Pinot %s", endpoint)
+	close(m.tableChannels[endpoint])
+	delete(m.tableChannels, endpoint)
+	delete(m.tableCaches, endpoint)
+	delete(m.workerPools, endpoint)
 	return nil
 }

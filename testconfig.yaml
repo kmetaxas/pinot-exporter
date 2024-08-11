@@ -5,6 +5,8 @@ serviceDiscovery:
   labelSelector:
     app: pinot
     nodeType: controller
+  kubeconfig:
+    context: "minikube"
 controller:
   url: http://localhost:9000
 
