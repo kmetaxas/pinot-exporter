@@ -2,6 +2,10 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+installClusterRoles: true
+installRoleBindings: true
+listenPort: 8088
+
 replicaCount: 1
 # The yaml to provide the exporter
 exporterconfig: |

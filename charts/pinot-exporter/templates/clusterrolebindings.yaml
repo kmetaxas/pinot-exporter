@@ -1,0 +1,16 @@
+{{- if .Values.installRoleBindings }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-list-services-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-list-services
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}-pinot-exporter
+  namespace: {{ .Release.Namespace }}
+
+{{- end }}
