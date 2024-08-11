@@ -1,0 +1,13 @@
+---
+port: 8088 # default is 8080
+mode: kubernetes
+serviceDiscovery:
+  labelSelector:
+    app: pinot
+    nodeType: controller
+  kubeconfig:
+    context: "minikube"
+controller:
+  url: http://localhost:9000
+
+

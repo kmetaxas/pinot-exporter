@@ -29,8 +29,12 @@ func refreshTableCache(ctx context.Context, controller *PinotController, sleepDu
 func (t *TableCache) TableRefreshChanListener(tables <-chan []string) {
 	for {
 		select {
-		case newTables := <-tables:
+		case newTables, chanIsOpen := <-tables:
 			{
+				if !chanIsOpen {
+					//cleanup and return
+					return
+				}
 				fmt.Printf("TableCache received update: %+v\n", newTables)
 				t.mutex.Lock()
 				t.Tables = newTables
