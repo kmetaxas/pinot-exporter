@@ -9,6 +9,10 @@ import (
 	"net/http"
 )
 
+type PinotControllerInterface interface {
+	GetSizeForTable(ctx context.Context, tableName string) (int, error)
+	String() string
+}
 type PinotController struct {
 	URL string `json:"url" yaml:"url"`
 }
@@ -42,7 +46,7 @@ func (c *PinotController) GetSizeForTable(ctx context.Context, tableName string)
 	}
 	var pinotResponse TableSizeResponse
 
-	url := fmt.Sprintf("%s/tables/%s/size", c.URL, tableName)
+	url := fmt.Sprintf("%s/tables/%s/size", c.String(), tableName)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		fmt.Printf("pinot client: Failed to create Request obj: %s", err)
@@ -55,7 +59,7 @@ func (c *PinotController) GetSizeForTable(ctx context.Context, tableName string)
 
 	res, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("pinot client: failed calling pinot endpoint at %s with error: %s", c.URL, err)
+		fmt.Printf("pinot client: failed calling pinot endpoint at %s with error: %s", c.String(), err)
 		return size, err
 	}
 
@@ -82,7 +86,7 @@ func (c *PinotController) ListTables(ctx context.Context) ([]string, error) {
 	var tables []string
 	var err error
 
-	url := fmt.Sprintf("%s/tables/", c.URL)
+	url := fmt.Sprintf("%s/tables/", c.String())
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		fmt.Printf("pinot client: Failed to create Request obj: %s", err)
@@ -95,7 +99,7 @@ func (c *PinotController) ListTables(ctx context.Context) ([]string, error) {
 
 	res, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("pinot client: failed calling pinot endpoint at %s with error: %s", c.URL, err)
+		fmt.Printf("pinot client: failed calling pinot endpoint at %s with error: %s", c.String(), err)
 		return tables, err
 	}
 

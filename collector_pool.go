@@ -14,14 +14,14 @@ Since there could be a lot of tables, we want to parallelize this task
 */
 type CollectorWorkerPool struct {
 	wg                 sync.WaitGroup
-	controller         *PinotController
+	controller         PinotControllerInterface
 	incomingTablesChan <-chan []string
 	tables             chan string
 	semaphore          chan struct{}
 	numWorkers         int
 }
 
-func NewCollectorWorkerPool(numWorkers int, controller *PinotController, incomingTablesChan <-chan []string) *CollectorWorkerPool {
+func NewCollectorWorkerPool(numWorkers int, controller PinotControllerInterface, incomingTablesChan <-chan []string) *CollectorWorkerPool {
 	pool := CollectorWorkerPool{
 		controller:         controller,
 		incomingTablesChan: incomingTablesChan,
@@ -66,7 +66,7 @@ func (c *CollectorWorkerPool) SubscribeToTableUpdates(tables <-chan []string) {
 }
 
 // Worker function that fetches the metric from the REST API
-func worker(ctx context.Context, tables <-chan string, controller *PinotController, semaphore chan struct{}, wg *sync.WaitGroup) {
+func worker(ctx context.Context, tables <-chan string, controller PinotControllerInterface, semaphore chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for table := range tables {
 		// Acquire semaphore
