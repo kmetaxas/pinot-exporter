@@ -12,3 +12,6 @@ staticcheck:
 coverage: build
 	go test -coverprofile=coverage.out
 	go tool cover -html=coverage.out
+
+docker:
+	docker build -t pinot-exporter:latest .
