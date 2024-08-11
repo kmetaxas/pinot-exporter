@@ -99,15 +99,6 @@ func isRunningInsideKubernetes() bool {
 	return err == nil
 }
 
-// Call as goroutine to start refreshing
-func (k *KubePinotControllerCache) PeriodicallyRefresh() {
-	// Periodically poll the PinotCluster resources
-	ticker := time.NewTicker(30 * time.Second)
-	for range ticker.C {
-		k.refreshPinotClustersList()
-	}
-}
-
 // return a label selector string suitable for using in the Kubernetes client LabelSelector field
 func GetLabelSelectorString(labels map[string]string) string {
 	var selector string
