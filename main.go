@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -54,17 +55,20 @@ func tableFanOutConsumer(tables <-chan []string, tableCache TableCache, workerPo
 }
 func main() {
 
-	//setup logging
+	// Seed the random number generator
+	rand.Seed(time.Now().UnixNano())
+	// First parse the arguments to load the correct config file
+	configFilePath := flag.String("config", "pinotexporter.yaml", "path to pinot-exporter config YAML")
+	flag.Parse()
+	// Load config
+	conf, err := NewConfigFromFile(*configFilePath)
+	// After loading config, setup logging
 	zapLogger, _ := zap.NewDevelopment()
 	defer zapLogger.Sync()
 	logger = zapLogger.Sugar()
 	logger.Infof("Started logging")
-
-	// Seed the random number generator
-	rand.Seed(time.Now().UnixNano())
-
-	conf, err := NewConfigFromFile("testconfig.yaml")
 	logger.Debugf("conf = %+v\n", conf)
+
 	err = conf.IsValid()
 	if err != nil {
 		panic(err)
