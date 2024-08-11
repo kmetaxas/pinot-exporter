@@ -33,7 +33,7 @@ func NewCollectorWorkerPool(numWorkers int, controller PinotControllerInterface,
 	for i := 1; i <= numWorkers; i++ {
 		ctx := context.Background()
 		pool.wg.Add(1)
-		go worker(ctx, pool.tables, pool.controller, pool.semaphore, &pool.wg)
+		go worker(i, ctx, pool.tables, pool.controller, pool.semaphore, &pool.wg)
 	}
 
 	return &pool
@@ -66,9 +66,11 @@ func (c *CollectorWorkerPool) SubscribeToTableUpdates(tables <-chan []string) {
 }
 
 // Worker function that fetches the metric from the REST API
-func worker(ctx context.Context, tables <-chan string, controller PinotControllerInterface, semaphore chan struct{}, wg *sync.WaitGroup) {
+func worker(id int, ctx context.Context, tables <-chan string, controller PinotControllerInterface, semaphore chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
+	logger.Infof("Started collector worker with id %d for pinot %s", id, controller)
 	for table := range tables {
+		logger.Debugf("worker %d consumed table update '%+v' from channel.", id, table)
 		// Acquire semaphore
 		semaphore <- struct{}{}
 
@@ -77,6 +79,7 @@ func worker(ctx context.Context, tables <-chan string, controller PinotControlle
 			// Introduce random jitter (0 to 500 ms)
 			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
 			time.Sleep(jitter)
+			logger.Debugf("Worker %d of (%s) collecting size for table %s", id, controller, table)
 			size, err := controller.GetSizeForTable(ctx, table)
 			if err != nil {
 				logger.Errorf("Failed to get size for table %s with error %s\n", table, err)
@@ -85,4 +88,5 @@ func worker(ctx context.Context, tables <-chan string, controller PinotControlle
 			TableSizeBytes.WithLabelValues(table).Set(float64(size))
 		}(table)
 	}
+	logger.Infof("Worker with id %d, that was monitoring %s is returning", id, controller)
 }

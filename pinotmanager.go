@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"time"
 )
 
@@ -46,9 +47,14 @@ func (m *PinotManager) refreshPinotsForever() {
 	if err != nil {
 		panic(err)
 	}
+	// Do a first update before the ticker starts
+	endpoints := m.kubeCache.refreshPinotClustersList()
+	m.updateKnownPinotsCache(endpoints)
+	// now start the ticker loop
 	ticker := time.NewTicker(time.Duration(m.refreshInteval) * time.Second)
 	for range ticker.C {
 		// This call refreshes the internal cache of m.kubeCache but also returns the results to us
+		logger.Debugf("refreshPinotsForever waking up after %d and refreshing cluster list", m.refreshInteval)
 		endpoints := m.kubeCache.refreshPinotClustersList()
 		// This is very naive. We should *add* and *remove* entries gracefully as each entry has associated workers and goroutines
 		m.updateKnownPinotsCache(endpoints)
@@ -92,27 +98,28 @@ func (m *PinotManager) updateKnownPinotsCache(pinots []string) {
 	}
 }
 
-// TODO
-// Receiver gets updates of which tables exist in a Pinot and sends this message to interested parties (currently
-func (m *PinotManager) tableUpdateReceiverFanOut() {
-}
 func (m *PinotManager) monitorPinot(endpoint string) (PinotController, error) {
 	var controller PinotController
 	controller.URL = endpoint
 	logger.Infof("Setting up monitoring for newly discovered Pinot %s", endpoint)
 
 	// Add a channel for table updates for this endpoint
-	tablesChan := make(chan []string)
+	tablesChan := make(chan []string, 1)
 	m.tableChannels[endpoint] = tablesChan
 	// setup a tablecache to refresh tables for this pinot
 	tableCache := &TableCache{}
 	m.tableCaches[endpoint] = tableCache
 
+	// Start refreshing tables via a goroutine.
+	// when the provided channel is closed, that goroutine will return
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*4)
+	go refreshTableCache(ctx, &controller, m.refreshInteval, m.tableChannels[endpoint])
+
 	// setup a collectorpool to collect metrics from this pinot
 	workerPool := NewCollectorWorkerPool(m.numConnectorWorkers, &controller, tablesChan)
 	m.workerPools[endpoint] = workerPool
 	// Create fanout consumer
-	go m.tableFanOutConsumer(endpoint, tablesChan, tableCache, workerPool)
+	go m.tableFanOutConsumer(endpoint, m.tableChannels[endpoint], m.tableCaches[endpoint], workerPool)
 
 	return controller, nil
 }
@@ -135,9 +142,11 @@ func (m *PinotManager) tableFanOutConsumer(endpoint string, tables <-chan []stri
 					close(tablesCopyForPool)
 					return
 				}
+				logger.Debugf("fanout Pushing %+v to downstream consumers", newTables)
 				// push record into the copy for TableRefreshChanListener
 				tablesCopyForCache <- newTables
 				// Inform the pool about table updates
+				logger.Debug("Sending to tablesCopyForPool table updte %+v", newTables)
 				tablesCopyForPool <- newTables
 			}
 		default:

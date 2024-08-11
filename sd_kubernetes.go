@@ -129,9 +129,9 @@ func (k *KubePinotControllerCache) refreshPinotClustersList() []string {
 		return endpoints
 	}
 
-	logger.Infof("Fetched Pinot services: %v\n", services)
+	//logger.Infof("Fetched Pinot services: %v\n", services)
 	for _, service := range services.Items {
-		logger.Debugf("Discovered service %+v\n", service)
+		//logger.Debugf("Discovered service %+v\n", service)
 		// TODO http or https?
 		// TODO (2) first port is used. How to check which port if a service has multiple ports?
 		endpoints = append(endpoints, fmt.Sprintf("http://%s.%s.svc:%d", service.ObjectMeta.Name, service.ObjectMeta.Namespace, service.Spec.Ports[0].Port))
