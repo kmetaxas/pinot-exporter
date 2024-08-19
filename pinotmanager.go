@@ -104,7 +104,7 @@ func (m *PinotManager) monitorPinot(endpoint string) (PinotController, error) {
 	logger.Infof("Setting up monitoring for newly discovered Pinot %s", endpoint)
 
 	// Add a channel for table updates for this endpoint
-	tablesChan := make(chan []string, 1)
+	tablesChan := make(chan []string)
 	m.tableChannels[endpoint] = tablesChan
 	// setup a tablecache to refresh tables for this pinot
 	tableCache := &TableCache{}
@@ -126,32 +126,25 @@ func (m *PinotManager) monitorPinot(endpoint string) (PinotController, error) {
 func (m *PinotManager) tableFanOutConsumer(endpoint string, tables <-chan []string, tableCache *TableCache, workerPool *CollectorWorkerPool) {
 	// First setup the refresh listener using another channel that this goroutine will copy into
 	logger.Infof("Starting fanout consumer for %s", endpoint)
-	tablesCopyForCache := make(chan []string, 1)
-	tablesCopyForPool := make(chan []string, 1)
+	tablesCopyForCache := make(chan []string)
+	tablesCopyForPool := make(chan []string)
 	go tableCache.TableRefreshChanListener(tablesCopyForCache)
 	go workerPool.SubscribeToTableUpdates(tablesCopyForPool)
 
-	for {
-		select {
-		case newTables, chanIsOpen := <-tables:
-			{
-				if !chanIsOpen {
-					// cleanup and return
-					logger.Debugf("Closing channels of fanout for %s and returning from goroutine", endpoint)
-					close(tablesCopyForCache)
-					close(tablesCopyForPool)
-					return
-				}
-				logger.Debugf("fanout Pushing %+v to downstream consumers", newTables)
-				// push record into the copy for TableRefreshChanListener
-				tablesCopyForCache <- newTables
-				// Inform the pool about table updates
-				logger.Debug("Sending to tablesCopyForPool table updte %+v", newTables)
-				tablesCopyForPool <- newTables
-			}
-		default:
-		}
+	for newTables := range tables {
+		logger.Debugf("fanout Pushing %+v to downstream consumers", newTables)
+		// push record into the copy for TableRefreshChanListener
+		tablesCopyForCache <- newTables
+		// Inform the pool about table updates
+		logger.Debug("Sending to tablesCopyForPool table updte %+v", newTables)
+		tablesCopyForPool <- newTables
 	}
+	// If we exit the for loop, then the Channel must have been closed.
+	// Cleanup and return
+	logger.Debugf("Closing channels of fanout for %s and returning from goroutine", endpoint)
+	close(tablesCopyForCache)
+	close(tablesCopyForPool)
+	return
 
 }
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+
+	//_ "net/http/pprof"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -34,23 +36,22 @@ distributes messages to all interested recepients
 
 func tableFanOutConsumer(tables <-chan []string, tableCache TableCache, workerPool *CollectorWorkerPool) {
 	// First setup the refresh listener using another channel that this goroutine will copy into
-	tablesCopyForCache := make(chan []string, 1)
-	tablesCopyForPool := make(chan []string, 1)
+	tablesCopyForCache := make(chan []string)
+	tablesCopyForPool := make(chan []string)
 	go tableCache.TableRefreshChanListener(tablesCopyForCache)
 	go workerPool.SubscribeToTableUpdates(tablesCopyForPool)
 
-	for {
-		select {
-		case newTables := <-tables:
-			{
-				// push record into the copy for TableRefreshChanListener
-				tablesCopyForCache <- newTables
-				// Inform the pool about table updates
-				tablesCopyForPool <- newTables
-			}
-		default:
-		}
+	for newTables := range tables {
+		// push record into the copy for TableRefreshChanListener
+		tablesCopyForCache <- newTables
+		// Inform the pool about table updates
+		tablesCopyForPool <- newTables
+
 	}
+	// Once the for loop ends, the channel is closed. Cleanup and return
+	close(tablesCopyForPool)
+	close(tablesCopyForCache)
+	return
 
 }
 func main() {
@@ -59,6 +60,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	// First parse the arguments to load the correct config file
 	configFilePath := flag.String("config", "pinotexporter.yaml", "path to pinot-exporter config YAML")
+
 	flag.Parse()
 	// Load config
 	conf, err := NewConfigFromFile(*configFilePath)
@@ -77,7 +79,7 @@ func main() {
 	if conf.Mode == "direct" {
 		logger.Info("Starting on Direct mode")
 		var tableCache TableCache
-		tables := make(chan []string, 1)
+		tables := make(chan []string)
 		workerPool := NewCollectorWorkerPool(conf.MaxParallelCollectors, conf.PinotController, tables)
 		defer workerPool.Close()
 

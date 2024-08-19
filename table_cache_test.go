@@ -8,7 +8,7 @@ import (
 )
 
 func TestTableRefreshChanListener(t *testing.T) {
-	tables := make(chan []string, 1)
+	tables := make(chan []string)
 
 	var cache TableCache
 

@@ -27,7 +27,7 @@ func NewCollectorWorkerPool(numWorkers int, controller PinotControllerInterface,
 		incomingTablesChan: incomingTablesChan,
 		numWorkers:         numWorkers,
 		semaphore:          make(chan struct{}, numWorkers),
-		tables:             make(chan string, 1),
+		tables:             make(chan string),
 	}
 	// Start workers
 	for i := 1; i <= numWorkers; i++ {
@@ -46,23 +46,13 @@ func (c *CollectorWorkerPool) Close() {
 
 // Receive table array updates
 func (c *CollectorWorkerPool) SubscribeToTableUpdates(tables <-chan []string) {
-	for {
-		select {
-		case newTables, chanIsOpen := <-tables:
-			{
-				if !chanIsOpen {
-					// cleanup and return
-					return
-				}
-				logger.Debugf("Pool received []table update: %+v\n", newTables)
-				for _, table := range newTables {
-					c.tables <- table
-				}
-			}
-		default:
+	for newTables := range tables {
+		logger.Debugf("Pool received []table update: %+v\n", newTables)
+		for _, table := range newTables {
+			c.tables <- table
 		}
-	}
 
+	}
 }
 
 // Worker function that fetches the metric from the REST API
