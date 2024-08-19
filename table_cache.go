@@ -27,21 +27,11 @@ func refreshTableCache(ctx context.Context, controller *PinotController, sleepDu
 
 // Refresh the table cache when we get a new list from the re
 func (t *TableCache) TableRefreshChanListener(tables <-chan []string) {
-	for {
-		select {
-		case newTables, chanIsOpen := <-tables:
-			{
-				if !chanIsOpen {
-					//cleanup and return
-					return
-				}
-				fmt.Printf("TableCache received update: %+v\n", newTables)
-				t.mutex.Lock()
-				t.Tables = newTables
-				t.mutex.Unlock()
-			}
-		default:
-		}
+	for newTables := range tables {
+		fmt.Printf("TableCache received update: %+v\n", newTables)
+		t.mutex.Lock()
+		t.Tables = newTables
+		t.mutex.Unlock()
 	}
 }
 

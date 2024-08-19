@@ -1,6 +1,6 @@
 ---
 port: 8088 # default is 8080
-mode: kubernetes
+mode: direct
 serviceDiscovery:
   labelSelector:
     app: pinot
