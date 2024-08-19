@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -106,6 +107,8 @@ func GetLabelSelectorString(labels map[string]string) string {
 	for labelName, labelValue := range labels {
 		pairs = append(pairs, labelName+"="+labelValue)
 	}
+	// Sort pairs to get consistent strings.
+	slices.Sort(pairs)
 	selector = strings.Join(pairs, ",")
 	return selector
 
