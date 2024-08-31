@@ -5,7 +5,7 @@ kind: ClusterRole
 metadata:
   name: {{ .Release.Name }}-list-services
 rules:
-- apiGroups: [""]
+- apiGroups: ["*"]
   resources: ["services"]
   verbs: ["list"]
 
