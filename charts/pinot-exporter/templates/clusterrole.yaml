@@ -7,6 +7,6 @@ metadata:
 rules:
 - apiGroups: ["*"]
   resources: ["services"]
-  verbs: ["list"]
+  verbs: ["list", "get"]
 
 {{- end }}
