@@ -10,7 +10,7 @@ roleRef:
   name: {{ .Release.Name }}-list-services
 subjects:
 - kind: ServiceAccount
-  name: {{ .Release.Name }}-pinot-exporter
+  name: {{ .Release.Name }}
   namespace: {{ .Release.Namespace }}
 
 {{- end }}
